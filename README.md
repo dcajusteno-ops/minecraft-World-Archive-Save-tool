@@ -15,19 +15,6 @@
 ## 目录结构
 
 ```text
-.workbuddy/
-  memory/
-    2026-10-02.md
-    MEMORY.md
-  publish/
-    commit_msg.txt
-    dryrun.log
-    highlights.txt
-    notes_preview.log
-    preview_notes.py
-    ship.log
-    ship_v02.py
-    summary.txt
 .gitignore
 mc_archiver.py
 mc_archiver.spec
