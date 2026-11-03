@@ -1,14 +1,43 @@
 import os
 import shutil
+import unicodedata
 import zipfile
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+
+
+def display_width(text):
+    """按显示宽度计算字符串长度：中文/全角字符算 2，其余算 1。"""
+    return sum(
+        2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
+        for ch in str(text)
+    )
+
+
+def fit_combobox_popdown(combobox, values, min_width=20):
+    """把下拉列表的宽度撑到能完整显示最长选项，避免长版本名被截断。
+
+    ttk.Combobox 的下拉列表默认与输入框同宽，版本名一长就看不全。
+    这里直接调整下拉列表内部 Listbox 的字符宽度。
+    """
+    values = [v for v in values if str(v)]
+    if not values:
+        return
+    width = max(max(display_width(v) for v in values) + 2, min_width)
+    try:
+        popdown = combobox.tk.call("ttk::combobox::PopdownWindow", combobox)
+        combobox.tk.call(f"{popdown}.f.l", "configure", "-width", str(width))
+    except tk.TclError:
+        # 内部窗口结构因 ttk 主题而异，取不到就静默跳过，不影响主流程
+        pass
+
 
 class MinecraftArchiverApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Minecraft 存档打包与导入工具")
-        self.root.geometry("600x480")
+        self.root.geometry("760x560")
+        self.root.minsize(640, 460)
         
         self.notebook = ttk.Notebook(root)
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -43,11 +72,16 @@ class MinecraftArchiverApp:
         frame2.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         
         self.saves_listbox = tk.Listbox(frame2, selectmode=tk.SINGLE)
-        scrollbar = ttk.Scrollbar(frame2, orient=tk.VERTICAL, command=self.saves_listbox.yview)
-        self.saves_listbox.config(yscrollcommand=scrollbar.set)
-        
-        self.saves_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        v_scrollbar = ttk.Scrollbar(frame2, orient=tk.VERTICAL, command=self.saves_listbox.yview)
+        h_scrollbar = ttk.Scrollbar(frame2, orient=tk.HORIZONTAL, command=self.saves_listbox.xview)
+        self.saves_listbox.config(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
+
+        # 用 grid 组合两个滚动条，长版本名/存档名可以横向滚动查看
+        frame2.rowconfigure(0, weight=1)
+        frame2.columnconfigure(0, weight=1)
+        self.saves_listbox.grid(row=0, column=0, sticky=tk.NSEW)
+        v_scrollbar.grid(row=0, column=1, sticky=tk.NS)
+        h_scrollbar.grid(row=1, column=0, sticky=tk.EW)
         
         # Export button
         ttk.Button(self.export_frame, text="打包选中的存档", command=self.export_save).pack(pady=10)
@@ -196,6 +230,8 @@ class MinecraftArchiverApp:
                     self.import_targets[f"[{version}]"] = os.path.join(version_path, "saves")
                     
         self.target_combobox['values'] = list(self.import_targets.keys())
+        # 撑宽下拉列表，长版本名在下拉菜单里也能完整显示
+        fit_combobox_popdown(self.target_combobox, list(self.import_targets.keys()))
         if self.target_combobox['values']:
             self.target_combobox.current(0)
             messagebox.showinfo("提示", "已找到可导入的目标位置，请在下拉列表中选择。")
@@ -249,14 +285,27 @@ class MinecraftArchiverApp:
         # Source and Target Version Selection
         frame2 = ttk.Frame(self.migrate_frame)
         frame2.pack(fill=tk.X, padx=10, pady=5)
-        
-        ttk.Label(frame2, text="源版本 (旧):").pack(side=tk.LEFT)
-        self.source_version_cb = ttk.Combobox(frame2, state="readonly", width=20)
-        self.source_version_cb.pack(side=tk.LEFT, padx=5)
-        
-        ttk.Label(frame2, text="目标版本 (新):").pack(side=tk.LEFT)
-        self.target_version_cb = ttk.Combobox(frame2, state="readonly", width=20)
-        self.target_version_cb.pack(side=tk.LEFT, padx=5)
+
+        ttk.Label(frame2, text="源版本 (旧):").grid(row=0, column=0, sticky=tk.W, pady=2)
+        self.source_version_cb = ttk.Combobox(frame2, state="readonly")
+        self.source_version_cb.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=2)
+
+        ttk.Label(frame2, text="目标版本 (新):").grid(row=1, column=0, sticky=tk.W, pady=2)
+        self.target_version_cb = ttk.Combobox(frame2, state="readonly")
+        self.target_version_cb.grid(row=1, column=1, sticky=tk.EW, padx=5, pady=2)
+
+        frame2.columnconfigure(1, weight=1)
+
+        # 完整版本名回显：版本名过长时，下拉框会被截断，这里换行完整展示
+        self.source_version_full_var = self.create_full_name_row(
+            self.migrate_frame, "源版本完整名称:", "（尚未选择）", "source"
+        )
+        self.target_version_full_var = self.create_full_name_row(
+            self.migrate_frame, "目标版本完整名称:", "（尚未选择）", "target"
+        )
+
+        self.source_version_cb.bind("<<ComboboxSelected>>", self.update_version_labels)
+        self.target_version_cb.bind("<<ComboboxSelected>>", self.update_version_labels)
         
         # Checkboxes for items to migrate
         frame3 = ttk.LabelFrame(self.migrate_frame, text="选择要迁移的内容 (将覆盖目标版本同名文件)")
@@ -288,6 +337,38 @@ class MinecraftArchiverApp:
         if path:
             self.migrate_mc_path_var.set(path)
 
+    def create_full_name_row(self, parent, title, placeholder, key):
+        """创建一行「完整名称」回显标签，宽度不足时自动换行，保证长版本名完整可见。"""
+        row = ttk.Frame(parent)
+        row.pack(fill=tk.X, padx=10, pady=(0, 4))
+
+        ttk.Label(row, text=title, width=16, anchor=tk.W).pack(side=tk.LEFT, anchor=tk.N)
+
+        var = tk.StringVar(value=placeholder)
+        # 给一个初始换行宽度，保证控件映射前也不会被截断
+        label = ttk.Label(row, textvariable=var, anchor=tk.W, justify=tk.LEFT, wraplength=460)
+        label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        # 跟随窗口宽度动态调整换行点
+        def on_configure(event, lbl=label):
+            lbl.configure(wraplength=max(event.width - 150, 80))
+
+        row.bind("<Configure>", on_configure)
+
+        if not hasattr(self, "_full_name_labels"):
+            self._full_name_labels = {}
+        self._full_name_labels[key] = label
+        return var
+
+    def update_version_labels(self, event=None):
+        """把当前选中的版本名同步到「完整名称」回显行。"""
+        for key, combobox in (("source", self.source_version_cb), ("target", self.target_version_cb)):
+            var = getattr(self, f"{key}_version_full_var", None)
+            if var is None:
+                continue
+            name = combobox.get().strip()
+            var.set(name if name else "（尚未选择）")
+
     def scan_migrate_versions(self):
         mc_path = self.migrate_mc_path_var.get()
         if not mc_path or not os.path.exists(mc_path):
@@ -306,12 +387,17 @@ class MinecraftArchiverApp:
             self.target_version_cb['values'] = self.migrate_versions
             self.source_version_cb.current(0)
             self.target_version_cb.current(0)
+            # 撑宽下拉列表，长版本名在下拉菜单里也能完整显示
+            fit_combobox_popdown(self.source_version_cb, self.migrate_versions)
+            fit_combobox_popdown(self.target_version_cb, self.migrate_versions)
+            self.update_version_labels()
             messagebox.showinfo("提示", f"找到 {len(self.migrate_versions)} 个版本，请在下拉列表中选择。")
         else:
             self.source_version_cb['values'] = []
             self.target_version_cb['values'] = []
             self.source_version_cb.set('')
             self.target_version_cb.set('')
+            self.update_version_labels()
             messagebox.showwarning("警告", "未在 versions 文件夹下找到任何版本。")
 
     def migrate_version_data(self):
