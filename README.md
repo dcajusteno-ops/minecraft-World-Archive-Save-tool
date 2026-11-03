@@ -1,6 +1,43 @@
 # Minecraft 存档打包与导入工具
 
 <!-- AUTO-README:START -->
+
+[![release](https://img.shields.io/github/v/release/dcajusteno-ops/minecraft-world-archive-save-tool?sort=semver&label=release)](https://github.com/dcajusteno-ops/minecraft-world-archive-save-tool/releases) [![last commit](https://img.shields.io/github/last-commit/dcajusteno-ops/minecraft-world-archive-save-tool)](https://github.com/dcajusteno-ops/minecraft-world-archive-save-tool/commits)
+
+带图形界面的 Minecraft 存档辅助工具：一键打包导出存档、批量导入，并在不同游戏版本之间迁移 mods、配置与存档。
+
+> 当前版本：v0.2
+
+## 技术栈
+
+- 语言：Python（100.0%）
+
+## 目录结构
+
+```text
+.workbuddy/
+  memory/
+    2026-10-02.md
+    MEMORY.md
+  publish/
+    commit_msg.txt
+    dryrun.log
+    highlights.txt
+    notes_preview.log
+    preview_notes.py
+    ship.log
+    ship_v02.py
+    summary.txt
+.gitignore
+mc_archiver.py
+mc_archiver.spec
+README.md
+```
+
+## License
+
+尚未声明许可证。
+
 <!-- AUTO-README:END -->
 
 ## 核心功能
